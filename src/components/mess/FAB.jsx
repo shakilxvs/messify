@@ -23,7 +23,7 @@ const REASON_COLORS = {
   Others:           { color: '#64748B', bg: '#F1F5F9' },
 };
 
-export default function FAB({ messId, members, myRole, userId, inviteCode, messName }) {
+export default function FAB({ messId, members, myRole, userId, inviteCode, messName, currentMonth }) {
   const [open, setOpen] = useState(false);
   const [sheet, setSheet] = useState(null);
   const [saving, setSaving] = useState(false);
