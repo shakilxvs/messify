@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
@@ -41,8 +41,9 @@ export default function MessPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(startOfMonth(new Date()));
 
+  const managerIdRef = useRef(null);
   const mk = monthKey(currentMonth);
-  const isManager = ['manager', 'comanager'].includes(myRole);
+  const isManager = myRole === 'manager' || myRole === 'comanager';
 
   useEffect(() => { if (!loading && !user) router.replace('/'); }, [user, loading]);
 
@@ -51,8 +52,12 @@ export default function MessPage() {
 
     const unsubMess = onSnapshot(doc(db, 'messes', messId), snap => {
       if (snap.exists()) {
-        setMess({ id: snap.id, ...snap.data() });
-        getUser(snap.data().managerId).then(setManager);
+        const data = snap.data();
+        setMess({ id: snap.id, ...data });
+        managerIdRef.current = data.managerId;
+        getUser(data.managerId).then(setManager);
+        // Re-check role whenever mess doc updates
+        if (data.managerId === user.uid) setMyRole('manager');
       }
     });
 
@@ -62,7 +67,9 @@ export default function MessPage() {
         const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setMembers(list);
         const me = list.find(m => m.userId === user.uid);
-        const effectiveRole = mess?.managerId === user.uid ? 'manager' : me?.role || null;
+        const effectiveRole = managerIdRef.current === user.uid
+          ? 'manager'
+          : me?.role || null;
         setMyRole(effectiveRole);
         setMyMemberId(me?.id || null);
         setLoadingPage(false);
@@ -115,14 +122,14 @@ export default function MessPage() {
   };
   const isCurrentMonth = monthKey(currentMonth) === monthKey(new Date());
 
-  const totalDue = Object.values(memberBillings).filter(b => b?.netDue > 0).reduce((s, b) => s + b.netDue, 0);
+  const totalDue     = Object.values(memberBillings).filter(b => b?.netDue > 0).reduce((s, b) => s + b.netDue, 0);
   const totalAdvance = Object.values(memberBillings).filter(b => b?.netDue < 0).reduce((s, b) => s + Math.abs(b.netDue), 0);
 
   return (
     <div className="min-h-screen pb-28" style={{ background: '#F5F5F5' }}>
 
       {/* HERO HEADER */}
-      <div className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #E60023 0%, #AD081B 100%)', paddingBottom: 36 }}>
+      <div className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #E60023 0%, #AD081B 100%)' }}>
         <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full opacity-10 bg-white" />
         <div className="absolute top-4 right-16 w-20 h-20 rounded-full opacity-10 bg-white" />
 
@@ -157,8 +164,8 @@ export default function MessPage() {
           </div>
         </div>
 
-        {/* Mess info */}
-        <div className="relative px-5 pt-1 pb-4">
+        {/* Mess name */}
+        <div className="relative px-5 pt-1 pb-3">
           <h1 className="text-2xl font-black text-white leading-tight">{mess?.name}</h1>
           {mess?.address && <p className="text-white/70 text-xs mt-0.5">{mess.address}</p>}
           <div className="flex items-center gap-2 mt-2">
@@ -168,38 +175,40 @@ export default function MessPage() {
         </div>
 
         {/* Month Selector */}
-        <div className="relative mx-5">
-          <div className="flex items-center justify-between rounded-2xl px-4 py-2.5"
+        <div className="relative mx-4 mb-4">
+          <div className="flex items-center justify-between rounded-2xl px-3 py-2.5"
             style={{ background: 'rgba(255,255,255,0.15)' }}>
-            <button onClick={prevMonth} className="p-1 rounded-lg" style={{ background: 'rgba(255,255,255,0.2)' }}>
-              <ChevronLeft size={18} className="text-white" />
+            <button onClick={prevMonth}
+              className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ background: 'rgba(255,255,255,0.2)' }}>
+              <ChevronLeft size={16} className="text-white" />
             </button>
             <div className="text-center">
-              <p className="text-white font-black text-base">{format(currentMonth, 'MMMM yyyy')}</p>
+              <p className="text-white font-black text-sm">{format(currentMonth, 'MMMM yyyy')}</p>
               {!isCurrentMonth && <p className="text-white/60 text-[10px]">Viewing past month</p>}
             </div>
             <button onClick={nextMonth} disabled={isCurrentMonth}
-              className="p-1 rounded-lg disabled:opacity-30"
+              className="w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-30"
               style={{ background: 'rgba(255,255,255,0.2)' }}>
-              <ChevronRight size={18} className="text-white" />
+              <ChevronRight size={16} className="text-white" />
             </button>
           </div>
         </div>
       </div>
 
       {/* STATS */}
-      <div className="px-4 -mt-4 grid grid-cols-3 gap-2 mb-4">
-        <StatCard icon={<TrendingUp size={13} />} label="Expense" value={`৳${(summary.totalExpense||0).toFixed(0)}`} accent="#EA580C" />
-        <StatCard icon={<UtensilsCrossed size={13} />} label="Meals" value={summary.totalMeals||0} accent="#0076D3" />
-        <StatCard icon={<Wallet size={13} />} label="Rate" value={`৳${(summary.mealRate||0).toFixed(1)}`} accent="#16A34A" />
+      <div className="px-4 pt-4 grid grid-cols-3 gap-2 mb-3">
+        <StatCard icon={<TrendingUp size={13} />}      label="Expense"   value={`৳${(summary.totalExpense||0).toFixed(0)}`} accent="#EA580C" bg="#FFF7ED" />
+        <StatCard icon={<UtensilsCrossed size={13} />} label="Meals"     value={summary.totalMeals||0}                      accent="#0076D3" bg="#EFF6FF" />
+        <StatCard icon={<Wallet size={13} />}          label="Meal Rate" value={`৳${(summary.mealRate||0).toFixed(1)}`}     accent="#16A34A" bg="#F0FDF4" />
       </div>
 
       {/* SUMMARY PILLS */}
       {(totalDue > 0 || totalAdvance > 0) && (
-        <div className="px-4 mb-4 flex gap-2">
+        <div className="px-4 mb-3 flex gap-2">
           {totalDue > 0 && (
             <div className="flex-1 rounded-2xl px-4 py-2.5 flex items-center gap-2" style={{ background: '#FFE0E4' }}>
-              <div className="w-2 h-2 rounded-full" style={{ background: '#E60023' }} />
+              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#E60023' }} />
               <div>
                 <p className="text-[10px] font-bold text-red-400">Total Owed</p>
                 <p className="text-sm font-black" style={{ color: '#E60023' }}>৳{totalDue.toFixed(0)}</p>
@@ -208,7 +217,7 @@ export default function MessPage() {
           )}
           {totalAdvance > 0 && (
             <div className="flex-1 rounded-2xl px-4 py-2.5 flex items-center gap-2" style={{ background: '#DCFCE7' }}>
-              <div className="w-2 h-2 rounded-full bg-green-500" />
+              <div className="w-2 h-2 rounded-full flex-shrink-0 bg-green-500" />
               <div>
                 <p className="text-[10px] font-bold text-green-500">Total Advance</p>
                 <p className="text-sm font-black text-green-700">৳{totalAdvance.toFixed(0)}</p>
@@ -228,7 +237,8 @@ export default function MessPage() {
               style={{ background: '#FFF0F1', color: '#E60023' }}>
               <Users size={12} /> Manage
               {pendingRequests.length > 0 && (
-                <span className="w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white ml-1" style={{ background: '#E60023' }}>
+                <span className="w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white ml-1"
+                  style={{ background: '#E60023' }}>
                   {pendingRequests.length}
                 </span>
               )}
@@ -250,18 +260,19 @@ export default function MessPage() {
               const isMe = m.userId === user?.uid;
               const displayRole = m.userId === mess?.managerId ? 'manager' : m.role;
               return (
-                <button key={m.id} onClick={() => setSelected(m)} className="w-full text-left">
-                  <div className="bg-white rounded-2xl px-4 py-3.5 flex items-center gap-3 shadow-card">
-                    <div className="relative">
+                <button key={m.id} onClick={() => setSelected(m)} className="w-full text-left block">
+                  <div className="bg-white rounded-2xl px-4 py-3.5 flex items-center gap-3 shadow-card active:scale-[0.98] transition-transform">
+                    <div className="relative flex-shrink-0">
                       <Avatar name={m.name} photoURL={m.photoURL} avatarColor={m.avatarColor} size={46} />
                       {isMe && (
-                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center" style={{ background: '#E60023' }}>
+                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center"
+                          style={{ background: '#E60023' }}>
                           <span className="text-white text-[7px] font-black">ME</span>
                         </div>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
+                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                         <p className="font-black text-gray-900 text-sm truncate">{m.name}</p>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
                           style={ROLE_STYLES[displayRole] || ROLE_STYLES.member}>
@@ -273,10 +284,12 @@ export default function MessPage() {
                       </p>
                     </div>
                     {b ? (
-                      <span className={`text-xs font-black px-2.5 py-1 rounded-xl ${netDue > 0 ? 'badge-owed' : netDue < 0 ? 'badge-advance' : 'badge-clear'}`}>
+                      <span className={`text-xs font-black px-2.5 py-1 rounded-xl flex-shrink-0 ${netDue > 0 ? 'badge-owed' : netDue < 0 ? 'badge-advance' : 'badge-clear'}`}>
                         {netDue > 0 ? `Due ৳${netDue.toFixed(0)}` : netDue < 0 ? `Adv ৳${Math.abs(netDue).toFixed(0)}` : 'Clear ✓'}
                       </span>
-                    ) : <div className="skeleton w-16 h-6 rounded-xl" />}
+                    ) : (
+                      <div className="skeleton w-16 h-6 rounded-xl flex-shrink-0" />
+                    )}
                   </div>
                 </button>
               );
@@ -300,14 +313,14 @@ export default function MessPage() {
   );
 }
 
-function StatCard({ icon, label, value, accent }) {
+function StatCard({ icon, label, value, accent, bg }) {
   return (
-    <div className="bg-white rounded-2xl p-3 shadow-card">
+    <div className="rounded-2xl p-3 shadow-card" style={{ background: bg || 'white' }}>
       <div className="flex items-center gap-1 mb-1" style={{ color: accent }}>
         {icon}
-        <span className="text-[10px] font-bold uppercase tracking-wide">{label}</span>
+        <span className="text-[10px] font-bold uppercase tracking-wide leading-none">{label}</span>
       </div>
-      <p className="text-lg font-black leading-tight" style={{ color: accent }}>{value}</p>
+      <p className="text-base font-black leading-tight" style={{ color: accent }}>{value}</p>
     </div>
   );
 }
