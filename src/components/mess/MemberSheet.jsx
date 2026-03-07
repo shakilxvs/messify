@@ -86,7 +86,6 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
 
   return (
     <BottomSheet open={open} onClose={onClose}>
-      {/* Header */}
       <div className="px-5 pt-2 pb-4">
         <div className="flex items-center gap-3">
           <Avatar name={member.name} photoURL={member.photoURL} avatarColor={member.avatarColor} size={56} />
@@ -106,7 +105,6 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
         </div>
       </div>
 
-      {/* Charges Editor */}
       {showCharges && isManager && (
         <div className="mx-5 mb-4 p-4 rounded-2xl border-2" style={{ borderColor: '#E60023', background: '#FFF8F8' }}>
           <p className="text-sm font-black text-gray-900 mb-3">Monthly Fixed Charges</p>
@@ -135,7 +133,6 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
         </div>
       )}
 
-      {/* Bill Breakdown */}
       {billing ? (
         <div className="mx-5 mb-4 rounded-2xl overflow-hidden border border-gray-100">
           <BillRow label="Meal Bill" sub={`${billing.myMeals} meals × ৳${billing.mealRate.toFixed(1)}`} value={billing.mealBill} accent="#0076D3" />
@@ -168,7 +165,6 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
         </div>
       )}
 
-      {/* Tabs */}
       <div className="flex px-5 gap-1 mb-3">
         {['meals','expenses','payments'].map(t => (
           <button key={t} onClick={() => setTab(t)}
@@ -197,7 +193,6 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
               </div>
             ))
         )}
-
         {tab === 'expenses' && (
           expenses.length === 0
             ? <Empty icon={<Receipt size={24} />} text="No expenses recorded" />
@@ -221,7 +216,6 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
               </div>
             ))
         )}
-
         {tab === 'payments' && (
           payments.length === 0
             ? <Empty icon={<Wallet size={24} />} text="No payments recorded" />
