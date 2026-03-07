@@ -132,7 +132,6 @@ export default function FAB({ messId, members, myRole, userId, inviteCode, messN
         </button>
       </div>
 
-      {/* ADD MEAL */}
       <BottomSheet open={sheet === 'meal'} onClose={closeSheet} title="Add Meals">
         <div className="px-5 pb-6">
           <input type="date" className="inp mb-4" value={mealDate} onChange={e => setMealDate(e.target.value)} max={today} />
@@ -165,7 +164,6 @@ export default function FAB({ messId, members, myRole, userId, inviteCode, messN
         </div>
       </BottomSheet>
 
-      {/* ADD EXPENSE */}
       <BottomSheet open={sheet === 'expense'} onClose={closeSheet} title="Add Expense">
         <div className="px-5 pb-6 space-y-3">
           <select className="inp" value={expMember} onChange={e => setExpMember(e.target.value)}>
@@ -194,7 +192,6 @@ export default function FAB({ messId, members, myRole, userId, inviteCode, messN
         </div>
       </BottomSheet>
 
-      {/* ADD PAYMENT */}
       <BottomSheet open={sheet === 'payment'} onClose={closeSheet} title="Add Payment">
         <div className="px-5 pb-6 space-y-3">
           <select className="inp" value={payMember} onChange={e => setPayMember(e.target.value)}>
@@ -227,7 +224,6 @@ export default function FAB({ messId, members, myRole, userId, inviteCode, messN
         </div>
       </BottomSheet>
 
-      {/* INVITE MEMBER */}
       <BottomSheet open={sheet === 'invite'} onClose={closeSheet} title="Invite Member">
         <div className="px-5 pb-6">
           <p className="text-sm text-gray-500 mb-4">Share this code with someone to invite them to <strong>{messName}</strong>.</p>
