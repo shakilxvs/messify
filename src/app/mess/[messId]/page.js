@@ -5,14 +5,14 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
 import { doc, collection, onSnapshot, query, where } from 'firebase/firestore';
-import { monthKey, getMemberBilling, getUser } from '@/lib/firestore';
+import { monthKey, getMemberBilling, getUser, leaveMess } from '@/lib/firestore';
 import Avatar from '@/components/ui/Avatar';
 import MemberSheet from '@/components/mess/MemberSheet';
 import MembersSheet from '@/components/mess/MembersSheet';
 import MessSettingsSheet from '@/components/mess/MessSettingsSheet';
 import FAB from '@/components/mess/FAB';
 import SkeletonPage from '@/components/ui/SkeletonLoader';
-import { ChevronLeft, ChevronRight, ArrowLeft, Users, Settings, UtensilsCrossed, TrendingUp, Wallet } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowLeft, Users, Settings, UtensilsCrossed, TrendingUp, Wallet, LogOut } from 'lucide-react';
 import { format, addMonths, subMonths, startOfMonth } from 'date-fns';
 
 const ROLE_LABELS = { manager: 'Manager', comanager: 'Co-Manager', member: 'Member' };
@@ -114,6 +114,12 @@ export default function MessPage() {
       </button>
     </div>
   );
+
+  const handleLeaveMess = async () => {
+    if (!confirm('Are you sure you want to leave this mess?')) return;
+    await leaveMess(messId, myMemberId);
+    router.push('/dashboard');
+  };
 
   const prevMonth = () => setCurrentMonth(p => subMonths(p, 1));
   const nextMonth = () => {
@@ -231,19 +237,29 @@ export default function MessPage() {
       <div className="px-4">
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs font-black text-gray-500 uppercase tracking-wider">Members · {members.length}</p>
-          {isManager && (
-            <button onClick={() => setShowMembers(true)}
-              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl"
-              style={{ background: '#FFF0F1', color: '#E60023' }}>
-              <Users size={12} /> Manage
-              {pendingRequests.length > 0 && (
-                <span className="w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white ml-1"
-                  style={{ background: '#E60023' }}>
-                  {pendingRequests.length}
-                </span>
-              )}
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Leave button for non-manager members */}
+            {myRole === 'member' && myMemberId && (
+              <button onClick={handleLeaveMess}
+                className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl"
+                style={{ background: '#FFF0F1', color: '#E60023' }}>
+                <LogOut size={12} /> Leave
+              </button>
+            )}
+            {isManager && (
+              <button onClick={() => setShowMembers(true)}
+                className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl"
+                style={{ background: '#FFF0F1', color: '#E60023' }}>
+                <Users size={12} /> Manage
+                {pendingRequests.length > 0 && (
+                  <span className="w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white ml-1"
+                    style={{ background: '#E60023' }}>
+                    {pendingRequests.length}
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
         </div>
 
         {members.length === 0 ? (
@@ -253,7 +269,7 @@ export default function MessPage() {
             <p className="text-sm text-gray-400 mt-1">Tap the people icon above to add members</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             {members.map(m => {
               const b = memberBillings[m.id];
               const netDue = b?.netDue || 0;
@@ -305,7 +321,8 @@ export default function MessPage() {
         messId={messId} mess={mess} myRole={myRole} userId={user?.uid} currentMonth={currentMonth} />
 
       <MembersSheet open={showMembers} onClose={() => setShowMembers(false)}
-        messId={messId} pendingRequests={pendingRequests} isManager={isManager} />
+        messId={messId} pendingRequests={pendingRequests} members={members}
+        myMemberId={myMemberId} isManager={isManager} />
 
       <MessSettingsSheet open={showSettings} onClose={() => setShowSettings(false)}
         mess={mess} members={members} myRole={myRole} myMemberId={myMemberId} messId={messId} />
