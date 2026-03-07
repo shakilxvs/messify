@@ -103,11 +103,12 @@ export default function FAB({ messId, members, myRole, userId, inviteCode, messN
     } else copyCode();
   };
 
+  const isManager = ['manager', 'comanager'].includes(myRole);
   const fabItems = [
     { label: 'Add Meal',      icon: UtensilsCrossed, key: 'meal' },
-    { label: 'Add Expense',   icon: Receipt,         key: 'expense' },
-    { label: 'Add Payment',   icon: Wallet,          key: 'payment' },
-    { label: 'Invite Member', icon: UserPlus,        key: 'invite' },
+    ...(isManager ? [{ label: 'Add Expense', icon: Receipt, key: 'expense' }] : []),
+    ...(isManager ? [{ label: 'Add Payment', icon: Wallet, key: 'payment' }] : []),
+    ...(isManager ? [{ label: 'Invite Member', icon: UserPlus, key: 'invite' }] : []),
   ];
 
   return (
@@ -136,7 +137,7 @@ export default function FAB({ messId, members, myRole, userId, inviteCode, messN
         <div className="px-5 pb-6">
           <input type="date" className="inp mb-4" value={mealDate} onChange={e => setMealDate(e.target.value)} max={today} />
           <div className="space-y-3">
-            {members.map(m => (
+            {(isManager ? members : members.filter(m => m.userId === userId)).map(m => (
               <div key={m.id} className="bg-gray-50 rounded-2xl p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <Avatar name={m.name} photoURL={m.photoURL} avatarColor={m.avatarColor} size={30} />
