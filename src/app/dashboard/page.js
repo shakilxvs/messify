@@ -62,9 +62,15 @@ export default function DashboardPage() {
     const code = inviteCode.trim().toUpperCase();
     if (code.length < 9) return;
     setLooking(true);
-    const mess = await getMessByInviteCode(code);
-    setMessPreview(mess || undefined);
-    setLooking(false);
+    try {
+      const mess = await getMessByInviteCode(code);
+      setMessPreview(mess === null ? undefined : mess);
+    } catch (e) {
+      console.error(e);
+      setMessPreview(undefined);
+    } finally {
+      setLooking(false);
+    }
   };
 
   const handleJoin = async () => {
