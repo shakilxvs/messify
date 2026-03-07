@@ -1,6 +1,6 @@
 import {
   collection, doc, addDoc, setDoc, updateDoc,
-  getDoc, getDocs, query, where, serverTimestamp, writeBatch,
+  getDoc, getDocs, query, where, serverTimestamp, writeBatch, deleteDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { format } from 'date-fns';
@@ -89,12 +89,19 @@ export async function rejectJoinRequest(messId, userId) {
   await updateDoc(doc(db, 'messes', messId, 'joinRequests', userId), { status: 'rejected' });
 }
 
+// Add a manual member (no Firebase account needed)
 export async function addManualMember(messId, { name, phone }) {
   const memberId = `manual_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   await setDoc(doc(db, 'messes', messId, 'members', memberId), {
-    userId: null, name: name.trim(), role: 'member', photoURL: null,
-    avatarColor: randomAvatarColor(), phone: phone?.trim() || null,
-    joinedAt: serverTimestamp(), status: 'active', isManual: true,
+    userId: null,
+    name: name.trim(),
+    role: 'member',
+    photoURL: null,
+    avatarColor: randomAvatarColor(),
+    phone: phone?.trim() || null,
+    joinedAt: serverTimestamp(),
+    status: 'active',
+    isManual: true,
     rent: 0, serviceCharge: 0, otherCharge: 0, otherChargeLabel: '',
   });
   return memberId;
@@ -126,6 +133,12 @@ export async function transferManager(messId, oldManagerId, newManagerId) {
 }
 export async function deleteMess(messId) {
   await updateDoc(doc(db, 'messes', messId), { deleted: true, deletedAt: serverTimestamp() });
+}
+
+export async function leaveMess(messId, memberId) {
+  await updateDoc(doc(db, 'messes', messId, 'members', memberId), {
+    status: 'left', leftAt: serverTimestamp(),
+  });
 }
 
 export async function addMeal(messId, mk, mealData, addedBy) {
@@ -212,7 +225,9 @@ export async function getMemberBilling(messId, mk, memberId) {
   const netDue = totalBill - totalPaid;
 
   return {
-    myMeals, mealRate, mealBill, rent, serviceCharge, otherCharge, otherChargeLabel,
-    totalFixedCharges, totalBill, paidMeal, paidRent, paidService, paidOthers, totalPaid, netDue,
+    myMeals, mealRate, mealBill,
+    rent, serviceCharge, otherCharge, otherChargeLabel,
+    totalFixedCharges, totalBill,
+    paidMeal, paidRent, paidService, paidOthers, totalPaid, netDue,
   };
 }
