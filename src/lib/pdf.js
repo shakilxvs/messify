@@ -28,7 +28,6 @@ export async function generateMemberPDF({ mess, member, billing, meals, expenses
   doc.text(`Member: ${member?.name || ''}`, 14, 52);
 
   let y = 60;
-
   doc.setFontSize(11); doc.setFont('helvetica', 'bold');
   doc.text('Bill Summary', 14, y); y += 3;
 
