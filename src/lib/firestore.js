@@ -89,6 +89,17 @@ export async function rejectJoinRequest(messId, userId) {
   await updateDoc(doc(db, 'messes', messId, 'joinRequests', userId), { status: 'rejected' });
 }
 
+export async function addManualMember(messId, { name, phone }) {
+  const memberId = `manual_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  await setDoc(doc(db, 'messes', messId, 'members', memberId), {
+    userId: null, name: name.trim(), role: 'member', photoURL: null,
+    avatarColor: randomAvatarColor(), phone: phone?.trim() || null,
+    joinedAt: serverTimestamp(), status: 'active', isManual: true,
+    rent: 0, serviceCharge: 0, otherCharge: 0, otherChargeLabel: '',
+  });
+  return memberId;
+}
+
 export async function updateMessInfo(messId, data) { await updateDoc(doc(db, 'messes', messId), data); }
 
 export async function regenerateInviteCode(messId) {
@@ -105,6 +116,16 @@ export async function updateMemberCharges(messId, memberId, charges) {
 }
 export async function removeMember(messId, memberId) {
   await updateDoc(doc(db, 'messes', messId, 'members', memberId), { status: 'removed', removedAt: serverTimestamp() });
+}
+export async function transferManager(messId, oldManagerId, newManagerId) {
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'messes', messId, 'members', oldManagerId), { role: 'member' });
+  batch.update(doc(db, 'messes', messId, 'members', newManagerId), { role: 'manager' });
+  batch.update(doc(db, 'messes', messId), { managerId: newManagerId });
+  await batch.commit();
+}
+export async function deleteMess(messId) {
+  await updateDoc(doc(db, 'messes', messId), { deleted: true, deletedAt: serverTimestamp() });
 }
 
 export async function addMeal(messId, mk, mealData, addedBy) {
@@ -169,7 +190,6 @@ export async function getMemberBilling(messId, mk, memberId) {
 
   const mealRate = summarySnap.exists() ? summarySnap.data().mealRate : 0;
   const m = memberSnap.exists() ? memberSnap.data() : {};
-
   const rent = m.rent || 0;
   const serviceCharge = m.serviceCharge || 0;
   const otherCharge = m.otherCharge || 0;
@@ -192,10 +212,7 @@ export async function getMemberBilling(messId, mk, memberId) {
   const netDue = totalBill - totalPaid;
 
   return {
-    myMeals, mealRate, mealBill,
-    rent, serviceCharge, otherCharge, otherChargeLabel,
-    totalFixedCharges, totalBill,
-    paidMeal, paidRent, paidService, paidOthers, totalPaid,
-    netDue,
+    myMeals, mealRate, mealBill, rent, serviceCharge, otherCharge, otherChargeLabel,
+    totalFixedCharges, totalBill, paidMeal, paidRent, paidService, paidOthers, totalPaid, netDue,
   };
 }
