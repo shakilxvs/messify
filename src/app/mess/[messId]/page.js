@@ -62,11 +62,10 @@ export default function MessPage() {
         const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setMembers(list);
         const me = list.find(m => m.userId === user.uid);
-// If user is the mess creator, always treat as manager
-const effectiveRole = mess?.managerId === user.uid ? 'manager' : me?.role || null;
-setMyRole(effectiveRole);
-setMyMemberId(me?.id || null);
-setLoadingPage(false);
+        const effectiveRole = mess?.managerId === user.uid ? 'manager' : me?.role || null;
+        setMyRole(effectiveRole);
+        setMyMemberId(me?.id || null);
+        setLoadingPage(false);
       }
     );
 
@@ -127,50 +126,38 @@ setLoadingPage(false);
         <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full opacity-10 bg-white" />
         <div className="absolute top-4 right-16 w-20 h-20 rounded-full opacity-10 bg-white" />
 
+        {/* Top bar */}
         <div className="relative px-4 pt-4 pb-2 flex items-center justify-between">
           <button onClick={() => router.push('/dashboard')}
             className="w-9 h-9 rounded-xl flex items-center justify-center"
             style={{ background: 'rgba(255,255,255,0.2)' }}>
             <ArrowLeft size={18} className="text-white" />
           </button>
+
           <div className="flex items-center gap-2">
-  {isManager && (
-    <button onClick={() => setShowMembers(true)}
-      className="relative w-9 h-9 rounded-xl flex items-center justify-center"
-      style={{ background: 'rgba(255,255,255,0.2)' }}>
-      <Users size={18} className="text-white" />
-      {pendingRequests.length > 0 && (
-        <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center bg-yellow-400 text-gray-900">
-          {pendingRequests.length}
-        </span>
-      )}
-    </button>
-  )}
-  {isManager && (
-    <button onClick={() => setShowSettings(true)}
-      className="w-9 h-9 rounded-xl flex items-center justify-center"
-      style={{ background: 'rgba(255,255,255,0.2)' }}>
-      <Settings size={18} className="text-white" />
-    </button>
-  )}
-</div>
-              className="relative w-9 h-9 rounded-xl flex items-center justify-center"
-              style={{ background: 'rgba(255,255,255,0.2)' }}>
-              <Users size={18} className="text-white" />
-              {pendingRequests.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center bg-yellow-400 text-gray-900">
-                  {pendingRequests.length}
-                </span>
-              )}
-            </button>
-            <button onClick={() => setShowSettings(true)}
-              className="w-9 h-9 rounded-xl flex items-center justify-center"
-              style={{ background: 'rgba(255,255,255,0.2)' }}>
-              <Settings size={18} className="text-white" />
-            </button>
+            {isManager && (
+              <button onClick={() => setShowMembers(true)}
+                className="relative w-9 h-9 rounded-xl flex items-center justify-center"
+                style={{ background: 'rgba(255,255,255,0.2)' }}>
+                <Users size={18} className="text-white" />
+                {pendingRequests.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center bg-yellow-400 text-gray-900">
+                    {pendingRequests.length}
+                  </span>
+                )}
+              </button>
+            )}
+            {isManager && (
+              <button onClick={() => setShowSettings(true)}
+                className="w-9 h-9 rounded-xl flex items-center justify-center"
+                style={{ background: 'rgba(255,255,255,0.2)' }}>
+                <Settings size={18} className="text-white" />
+              </button>
+            )}
           </div>
         </div>
 
+        {/* Mess info */}
         <div className="relative px-5 pt-1 pb-4">
           <h1 className="text-2xl font-black text-white leading-tight">{mess?.name}</h1>
           {mess?.address && <p className="text-white/70 text-xs mt-0.5">{mess.address}</p>}
@@ -184,7 +171,7 @@ setLoadingPage(false);
         <div className="relative mx-5">
           <div className="flex items-center justify-between rounded-2xl px-4 py-2.5"
             style={{ background: 'rgba(255,255,255,0.15)' }}>
-            <button onClick={prevMonth} className="p-1 rounded-lg transition-colors" style={{ background: 'rgba(255,255,255,0.2)' }}>
+            <button onClick={prevMonth} className="p-1 rounded-lg" style={{ background: 'rgba(255,255,255,0.2)' }}>
               <ChevronLeft size={18} className="text-white" />
             </button>
             <div className="text-center">
@@ -192,7 +179,7 @@ setLoadingPage(false);
               {!isCurrentMonth && <p className="text-white/60 text-[10px]">Viewing past month</p>}
             </div>
             <button onClick={nextMonth} disabled={isCurrentMonth}
-              className="p-1 rounded-lg transition-colors disabled:opacity-30"
+              className="p-1 rounded-lg disabled:opacity-30"
               style={{ background: 'rgba(255,255,255,0.2)' }}>
               <ChevronRight size={18} className="text-white" />
             </button>
@@ -261,7 +248,7 @@ setLoadingPage(false);
               const b = memberBillings[m.id];
               const netDue = b?.netDue || 0;
               const isMe = m.userId === user?.uid;
-const displayRole = (m.userId === mess?.managerId) ? 'manager' : m.role;
+              const displayRole = m.userId === mess?.managerId ? 'manager' : m.role;
               return (
                 <button key={m.id} onClick={() => setSelected(m)} className="w-full text-left">
                   <div className="bg-white rounded-2xl px-4 py-3.5 flex items-center gap-3 shadow-card">
