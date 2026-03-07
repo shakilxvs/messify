@@ -96,7 +96,6 @@ export default function MessPage() {
 
   return (
     <div className="min-h-screen pb-24" style={{ background: '#F5F5F5' }}>
-      {/* Top Bar */}
       <div className="bg-white sticky top-0 z-30 px-4 py-3 flex items-center justify-between" style={{ boxShadow: '0 1px 0 #F0F0F0' }}>
         <button onClick={() => router.push('/dashboard')} className="p-2 -ml-2 rounded-xl hover:bg-gray-100">
           <ArrowLeft size={20} className="text-gray-600" />
@@ -108,14 +107,12 @@ export default function MessPage() {
         <span className="text-xs font-semibold text-gray-400">{format(new Date(), 'MMM yyyy')}</span>
       </div>
 
-      {/* Stats */}
       <div className="px-4 pt-4 pb-2 grid grid-cols-3 gap-2">
         <StatCard label="Total Expense" value={`৳${(summary.totalExpense || 0).toFixed(0)}`} accent="#EA580C" bg="#FFF7ED" />
         <StatCard label="Total Meals"   value={(summary.totalMeals || 0)}                      accent="#0076D3" bg="#EFF6FF" />
         <StatCard label="Meal Rate"     value={`৳${(summary.mealRate || 0).toFixed(1)}`}       accent="#16A34A" bg="#F0FDF4" />
       </div>
 
-      {/* Pending Requests */}
       {isManager && pendingRequests.length > 0 && (
         <div className="px-4 py-3">
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Join Requests · {pendingRequests.length}</p>
@@ -136,7 +133,6 @@ export default function MessPage() {
         </div>
       )}
 
-      {/* Members List */}
       <div className="px-4 pt-2">
         <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Members · {members.length}</p>
         {members.length === 0 ? (
@@ -178,12 +174,8 @@ export default function MessPage() {
       </div>
 
       <FAB messId={messId} members={members} myRole={myRole} userId={user?.uid} inviteCode={mess?.inviteCode} messName={mess?.name} />
-
-      <MemberSheet open={!!selectedMember} onClose={() => setSelected(null)} member={selectedMember}
-        messId={messId} mess={mess} myRole={myRole} userId={user?.uid} />
-
-      <MessInfoSheet open={showMessInfo} onClose={() => setShowMessInfo(false)}
-        mess={mess} manager={manager} myRole={myRole} messId={messId} />
+      <MemberSheet open={!!selectedMember} onClose={() => setSelected(null)} member={selectedMember} messId={messId} mess={mess} myRole={myRole} userId={user?.uid} />
+      <MessInfoSheet open={showMessInfo} onClose={() => setShowMessInfo(false)} mess={mess} manager={manager} myRole={myRole} messId={messId} />
     </div>
   );
 }
