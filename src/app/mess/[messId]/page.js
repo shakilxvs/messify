@@ -134,7 +134,26 @@ setLoadingPage(false);
             <ArrowLeft size={18} className="text-white" />
           </button>
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowMembers(true)}
+  {isManager && (
+    <button onClick={() => setShowMembers(true)}
+      className="relative w-9 h-9 rounded-xl flex items-center justify-center"
+      style={{ background: 'rgba(255,255,255,0.2)' }}>
+      <Users size={18} className="text-white" />
+      {pendingRequests.length > 0 && (
+        <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center bg-yellow-400 text-gray-900">
+          {pendingRequests.length}
+        </span>
+      )}
+    </button>
+  )}
+  {isManager && (
+    <button onClick={() => setShowSettings(true)}
+      className="w-9 h-9 rounded-xl flex items-center justify-center"
+      style={{ background: 'rgba(255,255,255,0.2)' }}>
+      <Settings size={18} className="text-white" />
+    </button>
+  )}
+</div>
               className="relative w-9 h-9 rounded-xl flex items-center justify-center"
               style={{ background: 'rgba(255,255,255,0.2)' }}>
               <Users size={18} className="text-white" />
