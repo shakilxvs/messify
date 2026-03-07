@@ -62,9 +62,11 @@ export default function MessPage() {
         const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setMembers(list);
         const me = list.find(m => m.userId === user.uid);
-        setMyRole(me?.role || null);
-        setMyMemberId(me?.id || null);
-        setLoadingPage(false);
+// If user is the mess creator, always treat as manager
+const effectiveRole = mess?.managerId === user.uid ? 'manager' : me?.role || null;
+setMyRole(effectiveRole);
+setMyMemberId(me?.id || null);
+setLoadingPage(false);
       }
     );
 
@@ -240,6 +242,7 @@ export default function MessPage() {
               const b = memberBillings[m.id];
               const netDue = b?.netDue || 0;
               const isMe = m.userId === user?.uid;
+const displayRole = (m.userId === mess?.managerId) ? 'manager' : m.role;
               return (
                 <button key={m.id} onClick={() => setSelected(m)} className="w-full text-left">
                   <div className="bg-white rounded-2xl px-4 py-3.5 flex items-center gap-3 shadow-card">
@@ -255,8 +258,8 @@ export default function MessPage() {
                       <div className="flex items-center gap-2 mb-0.5">
                         <p className="font-black text-gray-900 text-sm truncate">{m.name}</p>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                          style={ROLE_STYLES[m.role] || ROLE_STYLES.member}>
-                          {ROLE_LABELS[m.role] || 'Member'}
+                          style={ROLE_STYLES[displayRole] || ROLE_STYLES.member}>
+                          {ROLE_LABELS[displayRole] || 'Member'}
                         </span>
                       </div>
                       <p className="text-xs text-gray-400">
