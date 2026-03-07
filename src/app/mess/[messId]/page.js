@@ -5,14 +5,15 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
 import { doc, collection, onSnapshot, query, where } from 'firebase/firestore';
-import { monthKey, getMemberBilling, approveJoinRequest, rejectJoinRequest, getUser } from '@/lib/firestore';
+import { monthKey, getMemberBilling, getUser } from '@/lib/firestore';
 import Avatar from '@/components/ui/Avatar';
 import MemberSheet from '@/components/mess/MemberSheet';
-import MessInfoSheet from '@/components/mess/MessInfoSheet';
+import MembersSheet from '@/components/mess/MembersSheet';
+import MessSettingsSheet from '@/components/mess/MessSettingsSheet';
 import FAB from '@/components/mess/FAB';
 import SkeletonPage from '@/components/ui/SkeletonLoader';
-import { ChevronDown, ArrowLeft, Check, X } from 'lucide-react';
-import { format } from 'date-fns';
+import { ChevronLeft, ChevronRight, ArrowLeft, Users, Settings, UtensilsCrossed, TrendingUp, Wallet } from 'lucide-react';
+import { format, addMonths, subMonths, startOfMonth } from 'date-fns';
 
 const ROLE_LABELS = { manager: 'Manager', comanager: 'Co-Manager', member: 'Member' };
 const ROLE_STYLES = {
@@ -32,12 +33,16 @@ export default function MessPage() {
   const [pendingRequests, setPending]   = useState([]);
   const [memberBillings, setBillings]   = useState({});
   const [myRole, setMyRole]             = useState(null);
+  const [myMemberId, setMyMemberId]     = useState(null);
   const [manager, setManager]           = useState(null);
   const [loadingPage, setLoadingPage]   = useState(true);
   const [selectedMember, setSelected]   = useState(null);
-  const [showMessInfo, setShowMessInfo] = useState(false);
+  const [showMembers, setShowMembers]   = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(startOfMonth(new Date()));
 
-  const mk = monthKey();
+  const mk = monthKey(currentMonth);
+  const isManager = ['manager', 'comanager'].includes(myRole);
 
   useEffect(() => { if (!loading && !user) router.replace('/'); }, [user, loading]);
 
@@ -58,17 +63,9 @@ export default function MessPage() {
         setMembers(list);
         const me = list.find(m => m.userId === user.uid);
         setMyRole(me?.role || null);
+        setMyMemberId(me?.id || null);
         setLoadingPage(false);
-        list.forEach(async m => {
-          const b = await getMemberBilling(messId, mk, m.id);
-          setBillings(p => ({ ...p, [m.id]: b }));
-        });
       }
-    );
-
-    const unsubSummary = onSnapshot(
-      doc(db, 'messes', messId, 'months', mk, 'summary', 'data'),
-      snap => { if (snap.exists()) setSummary(snap.data()); }
     );
 
     const unsubPending = onSnapshot(
@@ -76,13 +73,31 @@ export default function MessPage() {
       snap => setPending(snap.docs.map(d => ({ id: d.id, ...d.data() })))
     );
 
-    return () => { unsubMess(); unsubMembers(); unsubSummary(); unsubPending(); };
+    return () => { unsubMess(); unsubMembers(); unsubPending(); };
   }, [messId, user?.uid]);
+
+  useEffect(() => {
+    if (!messId || members.length === 0) return;
+    setSummary({ totalExpense: 0, totalMeals: 0, mealRate: 0 });
+    setBillings({});
+
+    const unsubSummary = onSnapshot(
+      doc(db, 'messes', messId, 'months', mk, 'summary', 'data'),
+      snap => { if (snap.exists()) setSummary(snap.data()); }
+    );
+
+    members.forEach(async m => {
+      const b = await getMemberBilling(messId, mk, m.id);
+      setBillings(p => ({ ...p, [m.id]: b }));
+    });
+
+    return () => unsubSummary();
+  }, [mk, members.length, messId]);
 
   if (loading || loadingPage) return <SkeletonPage />;
 
   if (!myRole) return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center">
+    <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center" style={{ background: '#F5F5F5' }}>
       <div className="text-5xl mb-4">🚫</div>
       <h2 className="text-xl font-black text-gray-900">Access Denied</h2>
       <p className="text-gray-500 mt-2 text-sm">You are not a member of this mess.</p>
@@ -92,80 +107,168 @@ export default function MessPage() {
     </div>
   );
 
-  const isManager = ['manager', 'comanager'].includes(myRole);
+  const prevMonth = () => setCurrentMonth(p => subMonths(p, 1));
+  const nextMonth = () => {
+    const next = addMonths(currentMonth, 1);
+    if (next <= startOfMonth(new Date())) setCurrentMonth(next);
+  };
+  const isCurrentMonth = monthKey(currentMonth) === monthKey(new Date());
+
+  const totalDue = Object.values(memberBillings).filter(b => b?.netDue > 0).reduce((s, b) => s + b.netDue, 0);
+  const totalAdvance = Object.values(memberBillings).filter(b => b?.netDue < 0).reduce((s, b) => s + Math.abs(b.netDue), 0);
 
   return (
-    <div className="min-h-screen pb-24" style={{ background: '#F5F5F5' }}>
-      <div className="bg-white sticky top-0 z-30 px-4 py-3 flex items-center justify-between" style={{ boxShadow: '0 1px 0 #F0F0F0' }}>
-        <button onClick={() => router.push('/dashboard')} className="p-2 -ml-2 rounded-xl hover:bg-gray-100">
-          <ArrowLeft size={20} className="text-gray-600" />
-        </button>
-        <button onClick={() => setShowMessInfo(true)} className="flex items-center gap-1.5 font-black text-gray-900 text-base">
-          {mess?.name}
-          <ChevronDown size={16} className="text-gray-400" />
-        </button>
-        <span className="text-xs font-semibold text-gray-400">{format(new Date(), 'MMM yyyy')}</span>
-      </div>
+    <div className="min-h-screen pb-28" style={{ background: '#F5F5F5' }}>
 
-      <div className="px-4 pt-4 pb-2 grid grid-cols-3 gap-2">
-        <StatCard label="Total Expense" value={`৳${(summary.totalExpense || 0).toFixed(0)}`} accent="#EA580C" bg="#FFF7ED" />
-        <StatCard label="Total Meals"   value={(summary.totalMeals || 0)}                      accent="#0076D3" bg="#EFF6FF" />
-        <StatCard label="Meal Rate"     value={`৳${(summary.mealRate || 0).toFixed(1)}`}       accent="#16A34A" bg="#F0FDF4" />
-      </div>
+      {/* HERO HEADER */}
+      <div className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #E60023 0%, #AD081B 100%)', paddingBottom: 36 }}>
+        <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full opacity-10 bg-white" />
+        <div className="absolute top-4 right-16 w-20 h-20 rounded-full opacity-10 bg-white" />
 
-      {isManager && pendingRequests.length > 0 && (
-        <div className="px-4 py-3">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Join Requests · {pendingRequests.length}</p>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {pendingRequests.map(req => (
-              <div key={req.id} className="bg-white rounded-2xl p-3 flex-shrink-0 shadow-card flex items-center gap-3" style={{ minWidth: 200 }}>
-                <Avatar name={req.name} size={36} />
-                <p className="font-semibold text-sm text-gray-900 flex-1 truncate">{req.name}</p>
-                <button onClick={() => approveJoinRequest(messId, req.id)} className="p-1.5 rounded-lg bg-green-100 text-green-600 hover:bg-green-200">
-                  <Check size={14} />
-                </button>
-                <button onClick={() => rejectJoinRequest(messId, req.id)} className="p-1.5 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200">
-                  <X size={14} />
-                </button>
-              </div>
-            ))}
+        <div className="relative px-4 pt-4 pb-2 flex items-center justify-between">
+          <button onClick={() => router.push('/dashboard')}
+            className="w-9 h-9 rounded-xl flex items-center justify-center"
+            style={{ background: 'rgba(255,255,255,0.2)' }}>
+            <ArrowLeft size={18} className="text-white" />
+          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowMembers(true)}
+              className="relative w-9 h-9 rounded-xl flex items-center justify-center"
+              style={{ background: 'rgba(255,255,255,0.2)' }}>
+              <Users size={18} className="text-white" />
+              {pendingRequests.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center bg-yellow-400 text-gray-900">
+                  {pendingRequests.length}
+                </span>
+              )}
+            </button>
+            <button onClick={() => setShowSettings(true)}
+              className="w-9 h-9 rounded-xl flex items-center justify-center"
+              style={{ background: 'rgba(255,255,255,0.2)' }}>
+              <Settings size={18} className="text-white" />
+            </button>
           </div>
+        </div>
+
+        <div className="relative px-5 pt-1 pb-4">
+          <h1 className="text-2xl font-black text-white leading-tight">{mess?.name}</h1>
+          {mess?.address && <p className="text-white/70 text-xs mt-0.5">{mess.address}</p>}
+          <div className="flex items-center gap-2 mt-2">
+            <Avatar name={manager?.name || ''} photoURL={manager?.photoURL} size={20} />
+            <span className="text-white/80 text-xs font-medium">{manager?.name} · Manager</span>
+          </div>
+        </div>
+
+        {/* Month Selector */}
+        <div className="relative mx-5">
+          <div className="flex items-center justify-between rounded-2xl px-4 py-2.5"
+            style={{ background: 'rgba(255,255,255,0.15)' }}>
+            <button onClick={prevMonth} className="p-1 rounded-lg transition-colors" style={{ background: 'rgba(255,255,255,0.2)' }}>
+              <ChevronLeft size={18} className="text-white" />
+            </button>
+            <div className="text-center">
+              <p className="text-white font-black text-base">{format(currentMonth, 'MMMM yyyy')}</p>
+              {!isCurrentMonth && <p className="text-white/60 text-[10px]">Viewing past month</p>}
+            </div>
+            <button onClick={nextMonth} disabled={isCurrentMonth}
+              className="p-1 rounded-lg transition-colors disabled:opacity-30"
+              style={{ background: 'rgba(255,255,255,0.2)' }}>
+              <ChevronRight size={18} className="text-white" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* STATS */}
+      <div className="px-4 -mt-4 grid grid-cols-3 gap-2 mb-4">
+        <StatCard icon={<TrendingUp size={13} />} label="Expense" value={`৳${(summary.totalExpense||0).toFixed(0)}`} accent="#EA580C" />
+        <StatCard icon={<UtensilsCrossed size={13} />} label="Meals" value={summary.totalMeals||0} accent="#0076D3" />
+        <StatCard icon={<Wallet size={13} />} label="Rate" value={`৳${(summary.mealRate||0).toFixed(1)}`} accent="#16A34A" />
+      </div>
+
+      {/* SUMMARY PILLS */}
+      {(totalDue > 0 || totalAdvance > 0) && (
+        <div className="px-4 mb-4 flex gap-2">
+          {totalDue > 0 && (
+            <div className="flex-1 rounded-2xl px-4 py-2.5 flex items-center gap-2" style={{ background: '#FFE0E4' }}>
+              <div className="w-2 h-2 rounded-full" style={{ background: '#E60023' }} />
+              <div>
+                <p className="text-[10px] font-bold text-red-400">Total Owed</p>
+                <p className="text-sm font-black" style={{ color: '#E60023' }}>৳{totalDue.toFixed(0)}</p>
+              </div>
+            </div>
+          )}
+          {totalAdvance > 0 && (
+            <div className="flex-1 rounded-2xl px-4 py-2.5 flex items-center gap-2" style={{ background: '#DCFCE7' }}>
+              <div className="w-2 h-2 rounded-full bg-green-500" />
+              <div>
+                <p className="text-[10px] font-bold text-green-500">Total Advance</p>
+                <p className="text-sm font-black text-green-700">৳{totalAdvance.toFixed(0)}</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      <div className="px-4 pt-2">
-        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Members · {members.length}</p>
+      {/* MEMBERS */}
+      <div className="px-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-black text-gray-500 uppercase tracking-wider">Members · {members.length}</p>
+          {isManager && (
+            <button onClick={() => setShowMembers(true)}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl"
+              style={{ background: '#FFF0F1', color: '#E60023' }}>
+              <Users size={12} /> Manage
+              {pendingRequests.length > 0 && (
+                <span className="w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white ml-1" style={{ background: '#E60023' }}>
+                  {pendingRequests.length}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
+
         {members.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="text-4xl mb-2">👥</div>
-            <p className="font-bold text-gray-600">No members yet</p>
-            <p className="text-xs text-gray-400 mt-1">Tap + to invite members</p>
+          <div className="bg-white rounded-3xl p-10 text-center shadow-card">
+            <div className="text-5xl mb-3">👥</div>
+            <p className="font-black text-gray-700">No members yet</p>
+            <p className="text-sm text-gray-400 mt-1">Tap the people icon above to add members</p>
           </div>
         ) : (
           <div className="space-y-2">
             {members.map(m => {
               const b = memberBillings[m.id];
               const netDue = b?.netDue || 0;
+              const isMe = m.userId === user?.uid;
               return (
-                <button key={m.id} onClick={() => setSelected(m)}
-                  className="card w-full rounded-2xl px-4 py-3 flex items-center gap-3 text-left active:scale-[0.98] transition-transform">
-                  <Avatar name={m.name} photoURL={m.photoURL} avatarColor={m.avatarColor} size={44} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-bold text-gray-900 text-sm">{m.name}</p>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={ROLE_STYLES[m.role] || ROLE_STYLES.member}>
-                        {ROLE_LABELS[m.role] || 'Member'}
-                      </span>
+                <button key={m.id} onClick={() => setSelected(m)} className="w-full text-left">
+                  <div className="bg-white rounded-2xl px-4 py-3.5 flex items-center gap-3 shadow-card">
+                    <div className="relative">
+                      <Avatar name={m.name} photoURL={m.photoURL} avatarColor={m.avatarColor} size={46} />
+                      {isMe && (
+                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center" style={{ background: '#E60023' }}>
+                          <span className="text-white text-[7px] font-black">ME</span>
+                        </div>
+                      )}
                     </div>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {b ? `${b.myMeals} meals · Bill ৳${b.totalBill.toFixed(0)}` : '…'}
-                    </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <p className="font-black text-gray-900 text-sm truncate">{m.name}</p>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                          style={ROLE_STYLES[m.role] || ROLE_STYLES.member}>
+                          {ROLE_LABELS[m.role] || 'Member'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-400">
+                        {b ? `${b.myMeals} meals · Bill ৳${b.totalBill.toFixed(0)}` : '…'}
+                      </p>
+                    </div>
+                    {b ? (
+                      <span className={`text-xs font-black px-2.5 py-1 rounded-xl ${netDue > 0 ? 'badge-owed' : netDue < 0 ? 'badge-advance' : 'badge-clear'}`}>
+                        {netDue > 0 ? `Due ৳${netDue.toFixed(0)}` : netDue < 0 ? `Adv ৳${Math.abs(netDue).toFixed(0)}` : 'Clear ✓'}
+                      </span>
+                    ) : <div className="skeleton w-16 h-6 rounded-xl" />}
                   </div>
-                  {b && (
-                    <span className={netDue > 0 ? 'badge-owed' : netDue < 0 ? 'badge-advance' : 'badge-clear'}>
-                      {netDue > 0 ? `Due ৳${netDue.toFixed(0)}` : netDue < 0 ? `Adv ৳${Math.abs(netDue).toFixed(0)}` : 'Clear'}
-                    </span>
-                  )}
                 </button>
               );
             })}
@@ -173,18 +276,29 @@ export default function MessPage() {
         )}
       </div>
 
-      <FAB messId={messId} members={members} myRole={myRole} userId={user?.uid} inviteCode={mess?.inviteCode} messName={mess?.name} />
-      <MemberSheet open={!!selectedMember} onClose={() => setSelected(null)} member={selectedMember} messId={messId} mess={mess} myRole={myRole} userId={user?.uid} />
-      <MessInfoSheet open={showMessInfo} onClose={() => setShowMessInfo(false)} mess={mess} manager={manager} myRole={myRole} messId={messId} />
+      <FAB messId={messId} members={members} myRole={myRole} userId={user?.uid}
+        inviteCode={mess?.inviteCode} messName={mess?.name} currentMonth={currentMonth} />
+
+      <MemberSheet open={!!selectedMember} onClose={() => setSelected(null)} member={selectedMember}
+        messId={messId} mess={mess} myRole={myRole} userId={user?.uid} currentMonth={currentMonth} />
+
+      <MembersSheet open={showMembers} onClose={() => setShowMembers(false)}
+        messId={messId} pendingRequests={pendingRequests} isManager={isManager} />
+
+      <MessSettingsSheet open={showSettings} onClose={() => setShowSettings(false)}
+        mess={mess} members={members} myRole={myRole} myMemberId={myMemberId} messId={messId} />
     </div>
   );
 }
 
-function StatCard({ label, value, accent, bg }) {
+function StatCard({ icon, label, value, accent }) {
   return (
-    <div className="rounded-2xl p-3 text-center shadow-card" style={{ background: bg || 'white' }}>
+    <div className="bg-white rounded-2xl p-3 shadow-card">
+      <div className="flex items-center gap-1 mb-1" style={{ color: accent }}>
+        {icon}
+        <span className="text-[10px] font-bold uppercase tracking-wide">{label}</span>
+      </div>
       <p className="text-lg font-black leading-tight" style={{ color: accent }}>{value}</p>
-      <p className="text-[10px] text-gray-500 font-semibold mt-0.5 leading-tight">{label}</p>
     </div>
   );
 }
