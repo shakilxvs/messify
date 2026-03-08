@@ -149,18 +149,18 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
       {/* Billing Summary */}
       {billing ? (
         <div className="mx-5 mb-4 rounded-2xl overflow-hidden border border-gray-100">
-          {/* Meal row */}
           <BillRow label="Meals" sub={`${billing.myMeals} meals × ৳${billing.mealRate.toFixed(1)}`} value={billing.mealBill} accent="#0076D3" />
-          {/* Fixed charges */}
-          {billing.rent > 0 && <BillRow label="Rent" value={billing.rent} accent="#EA580C" />}
+          {billing.rent > 0          && <BillRow label="Rent"           value={billing.rent}          accent="#EA580C" />}
           {billing.serviceCharge > 0 && <BillRow label="Service Charge" value={billing.serviceCharge} accent="#9B59B6" />}
-          {billing.otherCharge > 0 && <BillRow label={billing.otherChargeLabel || 'Other'} value={billing.otherCharge} accent="#64748B" />}
+          {billing.otherCharge > 0   && <BillRow label={billing.otherChargeLabel || 'Other'} value={billing.otherCharge} accent="#64748B" />}
           {/* Total bill */}
           <div className="px-4 py-3 flex justify-between items-center" style={{ background: '#FFF0F1' }}>
             <span className="text-sm font-black text-gray-900">Total Mess Bill</span>
             <span className="text-base font-black" style={{ color: '#E60023' }}>৳{billing.totalBill.toFixed(0)}</span>
           </div>
-          {/* Payments */}
+          {/* Expense contributions (what they spent on buying) */}
+          {billing.memberExpenses > 0 && <BillRow label="Spent on Mess" sub="Expense contribution" value={-billing.memberExpenses} accent="#16A34A" />}
+          {/* Direct payments */}
           {billing.paidMeal > 0    && <BillRow label="Paid (Meal)"           value={-billing.paidMeal}    accent="#16A34A" />}
           {billing.paidRent > 0    && <BillRow label="Paid (Rent)"           value={-billing.paidRent}    accent="#16A34A" />}
           {billing.paidService > 0 && <BillRow label="Paid (Service Charge)" value={-billing.paidService} accent="#16A34A" />}
@@ -209,7 +209,12 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
                   </p>
                 </div>
                 {isManager && (
-                  <button onClick={() => deleteMeal(messId, mk, m.id, userId)} className="p-2 rounded-lg hover:bg-red-50">
+                  <button onClick={() => setConfirm({
+                    type: 'danger', title: 'Delete Meal?',
+                    message: `Remove ${m.total} meal(s) on ${m.date}?`,
+                    confirmLabel: 'Delete',
+                    action: () => deleteMeal(messId, mk, m.id, userId),
+                  })} className="p-2 rounded-lg hover:bg-red-50">
                     <Trash2 size={14} className="text-gray-300 hover:text-red-500" />
                   </button>
                 )}
@@ -232,7 +237,12 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
                 <div className="flex items-center gap-2">
                   <span className="font-black text-gray-900 text-sm">৳{e.amount}</span>
                   {isManager && (
-                    <button onClick={() => deleteExpense(messId, mk, e.id, userId)} className="p-2 rounded-lg hover:bg-red-50">
+                    <button onClick={() => setConfirm({
+                      type: 'danger', title: 'Delete Expense?',
+                      message: `Remove ৳${e.amount} expense for "${e.description || e.category}"?`,
+                      confirmLabel: 'Delete',
+                      action: () => deleteExpense(messId, mk, e.id, userId),
+                    })} className="p-2 rounded-lg hover:bg-red-50">
                       <Trash2 size={14} className="text-gray-300 hover:text-red-500" />
                     </button>
                   )}
@@ -260,7 +270,12 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
                 <div className="flex items-center gap-2">
                   <span className="font-black text-green-600 text-sm">৳{p.amount}</span>
                   {isManager && (
-                    <button onClick={() => deletePayment(messId, mk, p.id, userId)} className="p-2 rounded-lg hover:bg-red-50">
+                    <button onClick={() => setConfirm({
+                      type: 'danger', title: 'Delete Payment?',
+                      message: `Remove ৳${p.amount} payment (${p.reason})?`,
+                      confirmLabel: 'Delete',
+                      action: () => deletePayment(messId, mk, p.id, userId),
+                    })} className="p-2 rounded-lg hover:bg-red-50">
                       <Trash2 size={14} className="text-gray-300 hover:text-red-500" />
                     </button>
                   )}
