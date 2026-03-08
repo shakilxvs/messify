@@ -42,6 +42,9 @@ export default function MessPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(startOfMonth(new Date()));
 
+  const [leaveConfirm, setLeaveConfirm] = useState(false);
+  const [leaveLoading, setLeaveLoading] = useState(false);
+
   const managerIdRef = useRef(null);
   const mk = monthKey(currentMonth);
   const isManager = myRole === 'manager' || myRole === 'comanager';
@@ -115,9 +118,6 @@ export default function MessPage() {
       </button>
     </div>
   );
-
-  const [leaveConfirm, setLeaveConfirm] = useState(false);
-  const [leaveLoading, setLeaveLoading] = useState(false);
 
   const handleLeaveMess = async () => {
     setLeaveLoading(true);
