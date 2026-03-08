@@ -44,6 +44,7 @@ export async function generateMemberPDF({ mess, member, billing, meals, expenses
   if (billing?.serviceCharge > 0) billRows.push(['Service Charge','-', tk(billing.serviceCharge)]);
   if (billing?.otherCharge > 0)   billRows.push([billing?.otherChargeLabel || 'Other', '-', tk(billing.otherCharge)]);
   billRows.push(['TOTAL MESS BILL', '', tk(billing?.totalBill)]);
+  if (billing?.memberExpenses > 0) billRows.push(['Spent on Mess', 'Expense contribution', neg(billing.memberExpenses)]);
   if (billing?.paidMeal > 0)    billRows.push(['Paid - Meal',           '', neg(billing.paidMeal)]);
   if (billing?.paidRent > 0)    billRows.push(['Paid - Rent',           '', neg(billing.paidRent)]);
   if (billing?.paidService > 0) billRows.push(['Paid - Service Charge', '', neg(billing.paidService)]);
