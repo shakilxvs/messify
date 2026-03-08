@@ -5,14 +5,18 @@ import BottomSheet from '@/components/ui/BottomSheet';
 import Avatar from '@/components/ui/Avatar';
 import { db } from '@/lib/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { getMemberBilling, deleteMeal, deleteExpense, deletePayment, updateMemberCharges, monthKey } from '@/lib/firestore';
+import { getMemberBilling, deleteMeal, deleteExpense, deletePayment, updateMemberCharges, monthKey, requestLeave } from '@/lib/firestore';
 import { generateMemberPDF } from '@/lib/pdf';
-import { Download, Trash2, UtensilsCrossed, Receipt, Wallet, Settings } from 'lucide-react';
+import { Download, Trash2, UtensilsCrossed, Receipt, Wallet, Settings, LogOut } from 'lucide-react';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 
-const ROLE_LABELS = { manager: 'Manager', comanager: 'Co-Manager', member: 'Member' };
-const ROLE_STYLES = { manager: 'badge-manager', comanager: 'badge-comanager', member: 'badge-member' };
+const ROLE_LABELS  = { manager: 'Manager', comanager: 'Co-Manager', member: 'Member' };
+const ROLE_STYLES  = { manager: 'badge-manager', comanager: 'badge-comanager', member: 'badge-member' };
 const REASON_COLORS = {
-  Meal: '#16A34A', Rent: '#0076D3', 'Service Charge': '#EA580C', Others: '#64748B',
+  Meal:             '#16A34A',
+  Rent:             '#0076D3',
+  'Service Charge': '#EA580C',
+  Others:           '#64748B',
 };
 
 export default function MemberSheet({ open, onClose, member, messId, mess, myRole, userId }) {
@@ -23,7 +27,13 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
   const [payments, setPayments] = useState([]);
   const [downloading, setDownloading] = useState(false);
   const [showCharges, setShowCharges] = useState(false);
+  const [confirm, setConfirm]   = useState(null);
+  const [confirming, setConf]   = useState(false);
 
+  const isMyCard = member?.userId === userId;
+  const isMember = myRole === 'member';
+
+  // Charges edit state
   const [rent, setRent] = useState('');
   const [serviceCharge, setServiceCharge] = useState('');
   const [otherCharge, setOtherCharge] = useState('');
@@ -86,6 +96,7 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
 
   return (
     <BottomSheet open={open} onClose={onClose}>
+      {/* Profile Header */}
       <div className="px-5 pt-2 pb-4">
         <div className="flex items-center gap-3">
           <Avatar name={member.name} photoURL={member.photoURL} avatarColor={member.avatarColor} size={56} />
@@ -97,7 +108,8 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
             </span>
           </div>
           {isManager && (
-            <button onClick={() => setShowCharges(p => !p)} className="p-2 rounded-xl transition-colors"
+            <button onClick={() => setShowCharges(p => !p)}
+              className="p-2 rounded-xl transition-colors"
               style={{ background: showCharges ? '#FFF0F1' : '#F5F5F5' }}>
               <Settings size={18} style={{ color: showCharges ? '#E60023' : '#666' }} />
             </button>
@@ -105,6 +117,7 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
         </div>
       </div>
 
+      {/* Fixed Charges Editor (Manager only) */}
       {showCharges && isManager && (
         <div className="mx-5 mb-4 p-4 rounded-2xl border-2" style={{ borderColor: '#E60023', background: '#FFF8F8' }}>
           <p className="text-sm font-black text-gray-900 mb-3">Monthly Fixed Charges</p>
@@ -133,20 +146,26 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
         </div>
       )}
 
+      {/* Billing Summary */}
       {billing ? (
         <div className="mx-5 mb-4 rounded-2xl overflow-hidden border border-gray-100">
-          <BillRow label="Meal Bill" sub={`${billing.myMeals} meals × ৳${billing.mealRate.toFixed(1)}`} value={billing.mealBill} accent="#0076D3" />
+          {/* Meal row */}
+          <BillRow label="Meals" sub={`${billing.myMeals} meals × ৳${billing.mealRate.toFixed(1)}`} value={billing.mealBill} accent="#0076D3" />
+          {/* Fixed charges */}
           {billing.rent > 0 && <BillRow label="Rent" value={billing.rent} accent="#EA580C" />}
           {billing.serviceCharge > 0 && <BillRow label="Service Charge" value={billing.serviceCharge} accent="#9B59B6" />}
           {billing.otherCharge > 0 && <BillRow label={billing.otherChargeLabel || 'Other'} value={billing.otherCharge} accent="#64748B" />}
+          {/* Total bill */}
           <div className="px-4 py-3 flex justify-between items-center" style={{ background: '#FFF0F1' }}>
             <span className="text-sm font-black text-gray-900">Total Mess Bill</span>
             <span className="text-base font-black" style={{ color: '#E60023' }}>৳{billing.totalBill.toFixed(0)}</span>
           </div>
+          {/* Payments */}
           {billing.paidMeal > 0    && <BillRow label="Paid (Meal)"           value={-billing.paidMeal}    accent="#16A34A" />}
           {billing.paidRent > 0    && <BillRow label="Paid (Rent)"           value={-billing.paidRent}    accent="#16A34A" />}
           {billing.paidService > 0 && <BillRow label="Paid (Service Charge)" value={-billing.paidService} accent="#16A34A" />}
           {billing.paidOthers > 0  && <BillRow label="Paid (Others)"         value={-billing.paidOthers}  accent="#16A34A" />}
+          {/* Net Due */}
           <div className="px-4 py-3 flex justify-between items-center border-t border-gray-100">
             <span className="text-sm font-black text-gray-900">Net Due</span>
             <div className="flex items-center gap-2">
@@ -165,6 +184,7 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
         </div>
       )}
 
+      {/* Tabs */}
       <div className="flex px-5 gap-1 mb-3">
         {['meals','expenses','payments'].map(t => (
           <button key={t} onClick={() => setTab(t)}
@@ -175,6 +195,7 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
         ))}
       </div>
 
+      {/* Tab Content */}
       <div className="px-5 pb-4 space-y-2 min-h-24">
         {tab === 'meals' && (
           meals.length === 0
@@ -183,7 +204,9 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
               <div key={m.id} className="bg-gray-50 rounded-xl p-3 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-bold text-gray-900">{m.date}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">B:{m.breakfast||0} · L:{m.lunch||0} · D:{m.dinner||0} = <strong>{m.total}</strong> meals</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    B:{m.breakfast||0} · L:{m.lunch||0} · D:{m.dinner||0} = <strong>{m.total}</strong> meals
+                  </p>
                 </div>
                 {isManager && (
                   <button onClick={() => deleteMeal(messId, mk, m.id, userId)} className="p-2 rounded-lg hover:bg-red-50">
@@ -193,6 +216,7 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
               </div>
             ))
         )}
+
         {tab === 'expenses' && (
           expenses.length === 0
             ? <Empty icon={<Receipt size={24} />} text="No expenses recorded" />
@@ -216,6 +240,7 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
               </div>
             ))
         )}
+
         {tab === 'payments' && (
           payments.length === 0
             ? <Empty icon={<Wallet size={24} />} text="No payments recorded" />
@@ -245,7 +270,27 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
         )}
       </div>
 
-      <div className="px-5 pb-6 pt-2 border-t border-gray-100">
+      {/* Download PDF */}
+      <div className="px-5 pb-6 pt-2 border-t border-gray-100 space-y-2">
+        {/* Member can request to leave from their own card */}
+        {isMyCard && isMember && !member?.leaveRequested && (
+          <button
+            onClick={() => setConfirm({
+              type: 'warning',
+              title: 'Request to Leave?',
+              message: 'Your manager will need to approve before you leave the mess.',
+              confirmLabel: 'Send Request',
+              action: async () => { await requestLeave(messId, member.id); onClose(); },
+            })}
+            className="w-full py-3 rounded-2xl font-bold text-orange-600 flex items-center justify-center gap-2 border-2 border-orange-200 bg-orange-50">
+            <LogOut size={18} /> Request to Leave
+          </button>
+        )}
+        {isMyCard && member?.leaveRequested && (
+          <div className="w-full py-3 rounded-2xl font-bold text-gray-400 flex items-center justify-center gap-2 bg-gray-100 text-sm">
+            Leave request sent — awaiting approval
+          </div>
+        )}
         <button onClick={handlePDF} disabled={downloading}
           className="w-full py-3 rounded-2xl font-bold text-white flex items-center justify-center gap-2 disabled:opacity-60"
           style={{ background: '#E60023' }}>
@@ -253,6 +298,22 @@ export default function MemberSheet({ open, onClose, member, messId, mess, myRol
           {downloading ? 'Generating PDF…' : 'Download PDF Report'}
         </button>
       </div>
+
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirm?.title}
+        message={confirm?.message}
+        confirmLabel={confirm?.confirmLabel}
+        type={confirm?.type}
+        loading={confirming}
+        onConfirm={async () => {
+          setConf(true);
+          await confirm.action();
+          setConf(false);
+          setConfirm(null);
+        }}
+        onCancel={() => setConfirm(null)}
+      />
     </BottomSheet>
   );
 }
