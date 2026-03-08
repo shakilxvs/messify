@@ -8,7 +8,7 @@ import { addMeal, addExpense, addPayment, monthKey } from '@/lib/firestore';
 import { format } from 'date-fns';
 
 const CATEGORIES = [
-  { label: 'Bazaar',  color: '#16A34A', bg: '#DCFCE7' },
+  { label: 'Meal',    color: '#16A34A', bg: '#DCFCE7' },
   { label: 'Rent',    color: '#0076D3', bg: '#DBEAFE' },
   { label: 'Utility', color: '#EA580C', bg: '#FED7AA' },
   { label: 'Gas',     color: '#9B59B6', bg: '#EDE9FE' },
@@ -39,7 +39,7 @@ export default function FAB({ messId, members, myRole, userId, inviteCode, messN
 
   const [expMember, setExpMember] = useState('');
   const [expAmount, setExpAmount] = useState('');
-  const [expCat,    setExpCat]    = useState('Bazaar');
+  const [expCat,    setExpCat]    = useState('Meal');
   const [expDesc,   setExpDesc]   = useState('');
   const [expDate,   setExpDate]   = useState(today);
 
