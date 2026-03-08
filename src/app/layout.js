@@ -1,6 +1,5 @@
 import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
-import PWARegister from '@/components/ui/PWARegister';
 
 export const metadata = {
   title: 'Messify — Track meals. Split fair.',
@@ -33,12 +32,16 @@ export default function RootLayout({ children }) {
           href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
           rel="stylesheet"
         />
+        <script dangerouslySetInnerHTML={{ __html: `
+          if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+              navigator.serviceWorker.register('/sw.js');
+            });
+          }
+        `}} />
       </head>
       <body>
-        <AuthProvider>
-          <PWARegister />
-          {children}
-        </AuthProvider>
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );
