@@ -31,7 +31,10 @@ export async function getUser(userId) {
 export async function createMess(managerId, data) {
   const inviteCode = generateInviteCode();
   const messRef = await addDoc(collection(db, 'messes'), {
-    ...data, managerId, inviteCode, currency: 'BDT', createdAt: serverTimestamp(),
+    ...data, managerId, inviteCode, currency: 'BDT',
+    messRent: 0, messServiceCharge: 0, messOtherCharge: 0, messOtherChargeLabel: '',
+    useMessLevelCharges: false,
+    createdAt: serverTimestamp(),
   });
   const managerUser = await getUser(managerId);
   await setDoc(doc(db, 'messes', messRef.id, 'members', managerId), {
@@ -42,6 +45,10 @@ export async function createMess(managerId, data) {
     avatarColor: managerUser?.avatarColor || randomAvatarColor(),
     phone: null, joinedAt: serverTimestamp(), status: 'active', isManual: false,
     rent: 0, serviceCharge: 0, otherCharge: 0, otherChargeLabel: '',
+  });
+  // Store mess in user's mess list for fast lookup
+  await updateDoc(doc(db, 'users', managerId), {
+    messIds: [...((await getUser(managerId))?.messIds || []), messRef.id],
   });
   return messRef.id;
 }
@@ -55,10 +62,33 @@ export async function getMessByInviteCode(code) {
   return { id: d.id, ...d.data(), managerName: manager?.name || 'Unknown' };
 }
 
+// Optimized: use messIds stored on user doc, fallback to scan
 export async function getUserMesses(userId) {
+  const userSnap = await getDoc(doc(db, 'users', userId));
+  const userData = userSnap.exists() ? userSnap.data() : {};
+  const messIds = userData.messIds || [];
+
+  // Fast path: user has stored mess IDs
+  if (messIds.length > 0) {
+    const result = [];
+    for (const messId of messIds) {
+      const [messSnap, memberSnap] = await Promise.all([
+        getDoc(doc(db, 'messes', messId)),
+        getDoc(doc(db, 'messes', messId, 'members', userId)),
+      ]);
+      if (messSnap.exists() && !messSnap.data().deleted &&
+          memberSnap.exists() && memberSnap.data().status === 'active') {
+        result.push({ id: messId, ...messSnap.data(), myRole: memberSnap.data().role });
+      }
+    }
+    return result;
+  }
+
+  // Fallback: scan all messes (old behavior)
   const allMesses = await getDocs(collection(db, 'messes'));
   const result = [];
   for (const d of allMesses.docs) {
+    if (d.data().deleted) continue;
     const m = await getDoc(doc(db, 'messes', d.id, 'members', userId));
     if (m.exists() && m.data().status === 'active')
       result.push({ id: d.id, ...d.data(), myRole: m.data().role });
@@ -83,31 +113,55 @@ export async function approveJoinRequest(messId, userId) {
   });
   batch.update(doc(db, 'messes', messId, 'joinRequests', userId), { status: 'approved' });
   await batch.commit();
+  // Add mess to user's list
+  const existing = (await getUser(userId))?.messIds || [];
+  if (!existing.includes(messId)) {
+    await updateDoc(doc(db, 'users', userId), { messIds: [...existing, messId] });
+  }
 }
 
 export async function rejectJoinRequest(messId, userId) {
   await updateDoc(doc(db, 'messes', messId, 'joinRequests', userId), { status: 'rejected' });
 }
 
-// Add a manual member (no Firebase account needed)
+// ── Leave Requests ─────────────────────────────────────
+export async function requestLeave(messId, memberId) {
+  await updateDoc(doc(db, 'messes', messId, 'members', memberId), {
+    leaveRequested: true, leaveRequestedAt: serverTimestamp(),
+  });
+}
+
+export async function approveLeaveRequest(messId, memberId) {
+  await updateDoc(doc(db, 'messes', messId, 'members', memberId), {
+    status: 'left', leaveRequested: false, leftAt: serverTimestamp(),
+  });
+}
+
+export async function rejectLeaveRequest(messId, memberId) {
+  await updateDoc(doc(db, 'messes', messId, 'members', memberId), {
+    leaveRequested: false,
+  });
+}
+
+// ── Manual members ──────────────────────────────────────
 export async function addManualMember(messId, { name, phone }) {
   const memberId = `manual_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   await setDoc(doc(db, 'messes', messId, 'members', memberId), {
-    userId: null,
-    name: name.trim(),
-    role: 'member',
-    photoURL: null,
-    avatarColor: randomAvatarColor(),
-    phone: phone?.trim() || null,
-    joinedAt: serverTimestamp(),
-    status: 'active',
-    isManual: true,
+    userId: null, name: name.trim(), role: 'member', photoURL: null,
+    avatarColor: randomAvatarColor(), phone: phone?.trim() || null,
+    joinedAt: serverTimestamp(), status: 'active', isManual: true,
     rent: 0, serviceCharge: 0, otherCharge: 0, otherChargeLabel: '',
+    leaveRequested: false,
   });
   return memberId;
 }
 
 export async function updateMessInfo(messId, data) { await updateDoc(doc(db, 'messes', messId), data); }
+
+// Mess-level shared charges (divided equally among active members)
+export async function updateMessCharges(messId, charges) {
+  await updateDoc(doc(db, 'messes', messId), charges);
+}
 
 export async function regenerateInviteCode(messId) {
   const code = generateInviteCode();
@@ -121,9 +175,31 @@ export async function updateMemberRole(messId, memberId, role) {
 export async function updateMemberCharges(messId, memberId, charges) {
   await updateDoc(doc(db, 'messes', messId, 'members', memberId), charges);
 }
+
+// Remove member AND soft-delete all their data, then recalc summary
 export async function removeMember(messId, memberId) {
-  await updateDoc(doc(db, 'messes', messId, 'members', memberId), { status: 'removed', removedAt: serverTimestamp() });
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'messes', messId, 'members', memberId), {
+    status: 'removed', removedAt: serverTimestamp(),
+  });
+  await batch.commit();
+
+  // Soft-delete all meals and expenses for this member across all months
+  const monthsSnap = await getDocs(collection(db, 'messes', messId, 'months'));
+  for (const monthDoc of monthsSnap.docs) {
+    const mk = monthDoc.id;
+    const [mealsSnap, expensesSnap] = await Promise.all([
+      getDocs(query(collection(db, 'messes', messId, 'months', mk, 'meals'), where('memberId', '==', memberId))),
+      getDocs(query(collection(db, 'messes', messId, 'months', mk, 'expenses'), where('memberId', '==', memberId))),
+    ]);
+    const b = writeBatch(db);
+    mealsSnap.docs.forEach(d => { if (!d.data().deleted) b.update(d.ref, { deleted: true }); });
+    expensesSnap.docs.forEach(d => { if (!d.data().deleted) b.update(d.ref, { deleted: true }); });
+    if (mealsSnap.docs.length + expensesSnap.docs.length > 0) await b.commit();
+    await recalcSummary(messId, mk);
+  }
 }
+
 export async function transferManager(messId, oldManagerId, newManagerId) {
   const batch = writeBatch(db);
   batch.update(doc(db, 'messes', messId, 'members', oldManagerId), { role: 'member' });
@@ -141,6 +217,7 @@ export async function leaveMess(messId, memberId) {
   });
 }
 
+// ── Meals ───────────────────────────────────────────────
 export async function addMeal(messId, mk, mealData, addedBy) {
   const total = (mealData.breakfast || 0) + (mealData.lunch || 0) + (mealData.dinner || 0);
   await addDoc(collection(db, 'messes', messId, 'months', mk, 'meals'), {
@@ -155,6 +232,7 @@ export async function deleteMeal(messId, mk, mealId, deletedBy) {
   await recalcSummary(messId, mk);
 }
 
+// ── Expenses ─────────────────────────────────────────────
 export async function addExpense(messId, mk, expenseData, addedBy) {
   await addDoc(collection(db, 'messes', messId, 'months', mk, 'expenses'), {
     ...expenseData, addedBy, createdAt: serverTimestamp(), editLog: [], deleted: false,
@@ -168,6 +246,7 @@ export async function deleteExpense(messId, mk, expId, deletedBy) {
   await recalcSummary(messId, mk);
 }
 
+// ── Payments ─────────────────────────────────────────────
 export async function addPayment(messId, mk, paymentData, addedBy) {
   await addDoc(collection(db, 'messes', messId, 'months', mk, 'payments'), {
     ...paymentData, addedBy, createdAt: serverTimestamp(), editLog: [], deleted: false,
@@ -193,7 +272,7 @@ export async function recalcSummary(messId, mk) {
   });
 }
 
-export async function getMemberBilling(messId, mk, memberId) {
+export async function getMemberBilling(messId, mk, memberId, messData, activeMemberCount) {
   const [mealsSnap, paymentsSnap, summarySnap, memberSnap] = await Promise.all([
     getDocs(collection(db, 'messes', messId, 'months', mk, 'meals')),
     getDocs(collection(db, 'messes', messId, 'months', mk, 'payments')),
@@ -203,26 +282,39 @@ export async function getMemberBilling(messId, mk, memberId) {
 
   const mealRate = summarySnap.exists() ? summarySnap.data().mealRate : 0;
   const m = memberSnap.exists() ? memberSnap.data() : {};
-  const rent = m.rent || 0;
-  const serviceCharge = m.serviceCharge || 0;
-  const otherCharge = m.otherCharge || 0;
-  const otherChargeLabel = m.otherChargeLabel || 'Other';
+
+  // Determine charges: if mess uses shared charges, divide by member count
+  let rent, serviceCharge, otherCharge, otherChargeLabel;
+  const useShared = messData?.useMessLevelCharges;
+  const count = activeMemberCount || 1;
+
+  if (useShared && messData) {
+    rent             = (messData.messRent || 0) / count;
+    serviceCharge    = (messData.messServiceCharge || 0) / count;
+    otherCharge      = (messData.messOtherCharge || 0) / count;
+    otherChargeLabel = messData.messOtherChargeLabel || 'Other';
+  } else {
+    rent             = m.rent || 0;
+    serviceCharge    = m.serviceCharge || 0;
+    otherCharge      = m.otherCharge || 0;
+    otherChargeLabel = m.otherChargeLabel || 'Other';
+  }
 
   const myMeals = mealsSnap.docs
     .filter(d => !d.data().deleted && d.data().memberId === memberId)
     .reduce((s, d) => s + (d.data().total || 0), 0);
 
-  const mealBill = myMeals * mealRate;
+  const mealBill          = myMeals * mealRate;
   const totalFixedCharges = rent + serviceCharge + otherCharge;
-  const totalBill = mealBill + totalFixedCharges;
+  const totalBill         = mealBill + totalFixedCharges;
 
-  const myPay = paymentsSnap.docs.filter(d => !d.data().deleted && d.data().memberId === memberId);
+  const myPay    = paymentsSnap.docs.filter(d => !d.data().deleted && d.data().memberId === memberId);
   const paidMeal    = myPay.filter(d => d.data().reason === 'Meal').reduce((s, d) => s + d.data().amount, 0);
   const paidRent    = myPay.filter(d => d.data().reason === 'Rent').reduce((s, d) => s + d.data().amount, 0);
   const paidService = myPay.filter(d => d.data().reason === 'Service Charge').reduce((s, d) => s + d.data().amount, 0);
   const paidOthers  = myPay.filter(d => d.data().reason === 'Others').reduce((s, d) => s + d.data().amount, 0);
   const totalPaid   = paidMeal + paidRent + paidService + paidOthers;
-  const netDue = totalBill - totalPaid;
+  const netDue      = totalBill - totalPaid;
 
   return {
     myMeals, mealRate, mealBill,
