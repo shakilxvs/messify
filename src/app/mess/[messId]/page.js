@@ -222,7 +222,7 @@ export default function MessPage() {
             <div className="flex-1 rounded-2xl px-4 py-2.5 flex items-center gap-2" style={{ background: '#FFE0E4' }}>
               <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#E60023' }} />
               <div>
-                <p className="text-[10px] font-bold text-red-400">Total Owed</p>
+                <p className="text-[10px] font-bold text-red-400">Total Due</p>
                 <p className="text-sm font-black" style={{ color: '#E60023' }}>৳{totalDue.toFixed(0)}</p>
               </div>
             </div>
