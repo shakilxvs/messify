@@ -273,17 +273,18 @@ export async function recalcSummary(messId, mk) {
 }
 
 export async function getMemberBilling(messId, mk, memberId, messData, activeMemberCount) {
-  const [mealsSnap, paymentsSnap, summarySnap, memberSnap] = await Promise.all([
+  const [mealsSnap, paymentsSnap, summarySnap, memberSnap, expensesSnap] = await Promise.all([
     getDocs(collection(db, 'messes', messId, 'months', mk, 'meals')),
     getDocs(collection(db, 'messes', messId, 'months', mk, 'payments')),
     getDoc(doc(db, 'messes', messId, 'months', mk, 'summary', 'data')),
     getDoc(doc(db, 'messes', messId, 'members', memberId)),
+    getDocs(collection(db, 'messes', messId, 'months', mk, 'expenses')),
   ]);
 
   const mealRate = summarySnap.exists() ? summarySnap.data().mealRate : 0;
   const m = memberSnap.exists() ? memberSnap.data() : {};
 
-  // Determine charges: if mess uses shared charges, divide by member count
+  // Determine fixed charges
   let rent, serviceCharge, otherCharge, otherChargeLabel;
   const useShared = messData?.useMessLevelCharges;
   const count = activeMemberCount || 1;
@@ -300,6 +301,7 @@ export async function getMemberBilling(messId, mk, memberId, messData, activeMem
     otherChargeLabel = m.otherChargeLabel || 'Other';
   }
 
+  // Meals eaten by this member
   const myMeals = mealsSnap.docs
     .filter(d => !d.data().deleted && d.data().memberId === memberId)
     .reduce((s, d) => s + (d.data().total || 0), 0);
@@ -308,18 +310,28 @@ export async function getMemberBilling(messId, mk, memberId, messData, activeMem
   const totalFixedCharges = rent + serviceCharge + otherCharge;
   const totalBill         = mealBill + totalFixedCharges;
 
-  const myPay    = paymentsSnap.docs.filter(d => !d.data().deleted && d.data().memberId === memberId);
+  // Money this member spent on mess expenses (bazaar etc.) — counts as their contribution
+  const memberExpenses = expensesSnap.docs
+    .filter(d => !d.data().deleted && d.data().memberId === memberId)
+    .reduce((s, d) => s + (d.data().amount || 0), 0);
+
+  // Direct payments made by this member
+  const myPay      = paymentsSnap.docs.filter(d => !d.data().deleted && d.data().memberId === memberId);
   const paidMeal    = myPay.filter(d => d.data().reason === 'Meal').reduce((s, d) => s + d.data().amount, 0);
   const paidRent    = myPay.filter(d => d.data().reason === 'Rent').reduce((s, d) => s + d.data().amount, 0);
   const paidService = myPay.filter(d => d.data().reason === 'Service Charge').reduce((s, d) => s + d.data().amount, 0);
   const paidOthers  = myPay.filter(d => d.data().reason === 'Others').reduce((s, d) => s + d.data().amount, 0);
   const totalPaid   = paidMeal + paidRent + paidService + paidOthers;
-  const netDue      = totalBill - totalPaid;
+
+  // Net Due = Bill - what they spent on mess - what they directly paid
+  const netDue = totalBill - memberExpenses - totalPaid;
 
   return {
     myMeals, mealRate, mealBill,
     rent, serviceCharge, otherCharge, otherChargeLabel,
     totalFixedCharges, totalBill,
-    paidMeal, paidRent, paidService, paidOthers, totalPaid, netDue,
+    memberExpenses,
+    paidMeal, paidRent, paidService, paidOthers, totalPaid,
+    netDue,
   };
 }
