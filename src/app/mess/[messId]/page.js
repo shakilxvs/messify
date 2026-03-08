@@ -5,13 +5,14 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
 import { doc, collection, onSnapshot, query, where } from 'firebase/firestore';
-import { monthKey, getMemberBilling, getUser, leaveMess } from '@/lib/firestore';
+import { monthKey, getMemberBilling, getUser, leaveMess, requestLeave } from '@/lib/firestore';
 import Avatar from '@/components/ui/Avatar';
 import MemberSheet from '@/components/mess/MemberSheet';
 import MembersSheet from '@/components/mess/MembersSheet';
 import MessSettingsSheet from '@/components/mess/MessSettingsSheet';
 import FAB from '@/components/mess/FAB';
 import SkeletonPage from '@/components/ui/SkeletonLoader';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { ChevronLeft, ChevronRight, ArrowLeft, Users, Settings, UtensilsCrossed, TrendingUp, Wallet, LogOut } from 'lucide-react';
 import { format, addMonths, subMonths, startOfMonth } from 'date-fns';
 
@@ -95,7 +96,7 @@ export default function MessPage() {
     );
 
     members.forEach(async m => {
-      const b = await getMemberBilling(messId, mk, m.id);
+      const b = await getMemberBilling(messId, mk, m.id, mess, members.length);
       setBillings(p => ({ ...p, [m.id]: b }));
     });
 
@@ -115,9 +116,14 @@ export default function MessPage() {
     </div>
   );
 
+  const [leaveConfirm, setLeaveConfirm] = useState(false);
+  const [leaveLoading, setLeaveLoading] = useState(false);
+
   const handleLeaveMess = async () => {
-    if (!confirm('Are you sure you want to leave this mess?')) return;
+    setLeaveLoading(true);
     await leaveMess(messId, myMemberId);
+    setLeaveLoading(false);
+    setLeaveConfirm(false);
     router.push('/dashboard');
   };
 
@@ -240,7 +246,7 @@ export default function MessPage() {
           <div className="flex items-center gap-2">
             {/* Leave button for non-manager members */}
             {myRole === 'member' && myMemberId && (
-              <button onClick={handleLeaveMess}
+              <button onClick={() => setLeaveConfirm(true)}
                 className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl"
                 style={{ background: '#FFF0F1', color: '#E60023' }}>
                 <LogOut size={12} /> Leave
@@ -322,10 +328,21 @@ export default function MessPage() {
 
       <MembersSheet open={showMembers} onClose={() => setShowMembers(false)}
         messId={messId} pendingRequests={pendingRequests} members={members}
-        myMemberId={myMemberId} isManager={isManager} />
+        myMemberId={myMemberId} isManager={isManager} myRole={myRole} />
 
       <MessSettingsSheet open={showSettings} onClose={() => setShowSettings(false)}
         mess={mess} members={members} myRole={myRole} myMemberId={myMemberId} messId={messId} />
+
+      <ConfirmDialog
+        open={leaveConfirm}
+        type="warning"
+        title="Leave this Mess?"
+        message="You will lose access immediately. The manager will need to re-invite you to rejoin."
+        confirmLabel="Leave Mess"
+        loading={leaveLoading}
+        onConfirm={handleLeaveMess}
+        onCancel={() => setLeaveConfirm(false)}
+      />
     </div>
   );
 }
